@@ -1,2 +1,2 @@
 # FVCOMpanion
-A visualization package for FVCOM results
+A python package for FVCOM visualization
