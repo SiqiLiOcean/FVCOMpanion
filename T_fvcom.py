@@ -2340,6 +2340,32 @@ def interp_cell2node(f, var_cell0):
     return var_node
 
 
+def calc_uv2current(u, v):
+    spd = np.sqrt(u**2 + v**2)
+    dir = np.degrees(np.arctan2(v, u))
+    dir = np.mod(dir, 360.0)
+    return spd, dir
+
+
+def calc_current2uv(spd, dir):
+    u = spd * np.cos(np.radians(dir))
+    v = spd * np.sin(np.radians(dir))
+    return u, v
+
+
+def calc_uv2wind(u, v):
+    spd = np.sqrt(u**2 + v**2)
+    dir = 270 - np.degrees(np.arctan2(v, u))
+    dir = np.mod(dir, 360)
+    return spd, dir
+
+
+def calc_wind2uv(spd, dir):
+    u = spd * np.cos(np.radians(270 - dir))
+    v = spd * np.sin(np.radians(270 - dir))
+    return u, v
+
+
 def interp_weight_ERA52FVCOM(GRID, TMSH, *args, **kwargs):
 
     return interp_weight_GRID2TMSH(GRID, TMSH, *args, **kwargs)
