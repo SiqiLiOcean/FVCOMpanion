@@ -969,6 +969,32 @@ def calc_sigma(sigma):
     return siglay
 
 
+def calc_nbve(nv):
+    """
+    Calculate the nbve (cells around nodes)
+  
+    Parameters:
+    - nv: nodes around cells (index starting from 1)
+
+    Returns:
+    - nbve: cells around nodes (index starting from 1)
+    """
+    node = np.max(nv)
+    MX_NBR_ELEM = 9
+
+    nbve = np.zeros((node, MX_NBR_ELEM), dtype=int)
+
+    for i in range(node):
+        row = np.where(np.isin(nv, i+1))[0] + 1
+        row = np.pad(row, (0, MX_NBR_ELEM-len(row)), mode='constant', constant_values=0)
+        nbve[i, :] = row
+
+    non_zero_columns = np.any(nbve!=0, axis=0)
+    nbve = nbve[:, non_zero_columns]
+    
+    return nbve
+
+
 def load_grid(*args, crs=None):
     """
     Load and process grid data from various file formats or directly from input arrays.
@@ -1031,13 +1057,24 @@ def load_grid(*args, crs=None):
             
     elif len(args) == 3:
         x, y, nv = args
+        x = np.array(x, dtype=float)
+        y = np.array(y, dtype=float)
+        nv = np.array(nv, dtype=int)
         h = x * 0.0
         siglay = x * 0.0
     elif len(args) == 4:
         x, y, nv, h = args
+        x = np.array(x, dtype=float)
+        y = np.array(y, dtype=float)
+        nv = np.array(nv, dtype=int)
+        h = np.array(h, dtype=float)
         siglay = x * 0.0
     elif len(args) == 5:
         x, y, nv, h, sigma = args
+        x = np.array(x, dtype=float)
+        y = np.array(y, dtype=float)
+        nv = np.array(nv, dtype=int)
+        h = np.array(h, dtype=float)
         siglay = calc_sigma(sigma)
     else:
         raise ValueError(f'Wronge inputs. Use either (fin) or (x, y, nv)')
@@ -1061,6 +1098,9 @@ def load_grid(*args, crs=None):
         bdy_x.append(x[ibdy - 1])
         bdy_y.append(y[ibdy - 1])
 
+    # Calculate NBVE
+    nbve = calc_nbve(nv)
+
     if crs is not None:
         crs = ccrs.PlateCarree()
         
@@ -1069,6 +1109,7 @@ def load_grid(*args, crs=None):
             'xc': xc, 'yc': yc, 
             'siglay': siglay, 'deplay': deplay,
             'bdy': bdy, 'bdy_x': bdy_x, 'bdy_y': bdy_y,
+            'nbve': nbve,
             'crs':crs}
 
 
@@ -1453,6 +1494,14 @@ def plane_image(ax,f, var, mask=None, *args, **kwargs):
     contour map, which can be used for further 
     customization or reference.
     """
+
+    if var.shape[0] == f['node']:
+        var = var
+    elif var.shape[0] == f['nele']:
+        var = interp_cell2node(f, var)
+    else:
+        raise ValueError(f"Wrong length of the first dimension: {var.shape[0]}.")
+
     if mask is None:
         handle = ax.tricontourf(f['x'], f['y'], f['nv']-1, var, *args, **kwargs)
     else:
@@ -2271,6 +2320,24 @@ def interp_node2cell(f, var_node):
     var_cell = np.mean(var_values, axis=1)
 
     return var_cell
+
+
+def interp_cell2node(f, var_cell0):
+
+    # Add a fake column before the first one in the first dimension
+    shape0 = var_cell0.shape
+    shape = (f['nele']+1,) + shape0[1:]
+
+    var_cell = np.full(shape, np.nan)
+    var_cell[1:] = var_cell0
+
+    # Extract the node values for each cell using np.take to handle multi-dimensional inputs.
+    var_values = np.take(var_cell, f['nbve'], axis=0)  # Shape: (M, MX_NBR_ELEM, ...)
+
+    # Average along the second axis (axis=1) which corresponds to the 3 nodes.
+    var_node = np.nanmean(var_values, axis=1)
+
+    return var_node
 
 
 def interp_weight_ERA52FVCOM(GRID, TMSH, *args, **kwargs):
